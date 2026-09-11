@@ -1,0 +1,57 @@
+=== Defect 1: Permission — /me/earnings used check_authenticated instead of check_instructor ===
+
+BEFORE FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/me/earnings -H "Authorization: Bearer <learner-token>"
+HTTP/1.1 200 OK
+...
+{"availableMinor":0,"pendingMinor":0,"currency":"NGN","minimumWithdrawalMinor":50000,"lastWithdrawalAt":null}
+
+AFTER FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/me/earnings -H "Authorization: Bearer <learner-token>"
+HTTP/1.1 403 Forbidden
+...
+{"code":"forbidden","message":"Instructors only.","data":{"status":403}}
+
+
+=== Defect 2: API contract — GET /courses returned unpublished courses ===
+
+BEFORE FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/courses
+HTTP/1.1 200 OK
+...
+(response includes "id":5, "isPublished":false — a course the contract says must never appear here)
+
+AFTER FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/courses
+HTTP/1.1 200 OK
+...
+(response has 4 courses, id 5 no longer present)
+
+=== Defect 3: Schema mismatch — GET /courses/{id} read a non-existent column "lessons_total" instead of "lesson_count" ===
+
+BEFORE FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/courses/1
+HTTP/1.1 200 OK
+...
+"lessonCount":0   (wrong — actual DB value for course 1 is 12, confirmed via SELECT)
+
+AFTER FIX:
+$ curl -i http://localhost:8080/wp-json/bemalearn/v1/courses/1
+HTTP/1.1 200 OK
+...
+"lessonCount":12   (matches DB)
+
+=== Defect 4: Validation — POST /me/withdrawals never enforced minimumWithdrawalMinor ===
+
+BEFORE FIX:
+$ curl -i -X POST .../me/withdrawals -d '{"amountMinor": 100, "payoutReference": "test-below-min-003"}'
+HTTP/1.1 201 Created
+...
+{"id":4,"amountMinor":100,"status":"pending","payoutReference":"test-below-min-003","createdAt":"2026-09-11T21:53:41+00:00"}
+(wrongly accepted — below the 50000 minimum, real DB row created)
+
+AFTER FIX:
+$ curl -i -X POST .../me/withdrawals -d '{"amountMinor": 100, "payoutReference": "test-below-min-001"}'
+HTTP/1.1 422 Unprocessable Entity
+...
+{"code":"below_minimum","message":"Amount is below the minimum withdrawal.","data":{"status":422}}
