@@ -3,6 +3,7 @@
 import { useAuthStore } from "@/lib/auth/authStore";
 import { useEarnings } from "@/lib/api/services/auth";
 import { StatusMessage } from "@/components/StatusMessage";
+import { WithdrawalForm } from "@/components/WithdrawalForm";
 import { formatMoney } from "@/lib/format";
 
 export default function EarningsPage() {
@@ -39,6 +40,7 @@ export default function EarningsPage() {
       <h1 className="text-xl font-semibold">Earnings</h1>
       <p>Available: {formatMoney(data.availableMinor, data.currency)}</p>
       <p>Pending: {formatMoney(data.pendingMinor, data.currency)}</p>
+      <WithdrawalForm earnings={data} />
     </div>
   );
 }
