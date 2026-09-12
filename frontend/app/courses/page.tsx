@@ -1,3 +1,7 @@
+/**
+ * The page that shows all courses for sale
+*/
+
 // app/courses/page.tsx
 "use client";
 

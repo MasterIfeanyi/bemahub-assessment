@@ -1,3 +1,6 @@
+/*
+* Lets someone log in
+*/
 "use client";
 
 import { useState } from "react";
