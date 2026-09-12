@@ -1,0 +1,12 @@
+$ python reconcile_earnings.py payouts.json
+instructor_id,total_net_minor
+7,59750
+9,79700
+warning: 2 paid row(s) had a missing/null fee_minor and were excluded: instructor ids [11, 7]
+$ echo $?
+3
+
+$ python reconcile_earnings.py does-not-exist.json
+error: could not read does-not-exist.json: [Errno 2] No such file or directory: 'does-not-exist.json'
+$ echo $?
+2

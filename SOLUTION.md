@@ -1,8 +1,8 @@
 # SOLUTION.md — copy this to your repository root and fill it in
 
-**Name:**
-**Date:**
-**Actual time spent:**
+**Name:** Ifeanyi Chima
+**Date:** 12th of September, 2026
+**Actual time spent:** 10 hours
 
 ---
 
@@ -14,17 +14,15 @@
 | 2 — Authentication | done | evidence/task-2-signedout.png, evidence/task-2-signedin.png, evidence/task-2-network.png |
 | 3 — Withdrawal form | done | evidence/task-3-validation.png, evidence/task-3-server-error.png, evidence/task-3-success.png, evidence/task-3-network.png |
 | 4 — PHP defects | 4 of 4 found and fixed | evidence/task-4-curl.txt |
-| 5 — Database | not attempted yet | — |
-| 6 — Infrastructure | not attempted yet | — |
-| 7 — Python | not attempted yet | — |
+| 5 — Database | done | database/migrations/002_fix_withdrawal_reference.sql, answers/task-5.md |
+| 6 — Infrastructure | done | answers/task-6.md |
+| 7 — Python | done | evidence/task-7-output.txt |
 
 ## 2. What I did NOT finish, and how I would approach it
 
-Tasks 5, 6, and 7 are not started yet.
+All 7 tasks are complete. Nothing outstanding.
 
-- **Task 5 (Database, ~22 min):** I already have practical familiarity with the `wp_bl_withdrawals` table from debugging test data during Task 3 and Task 4 (checking pending/cancelled rows, confirming the unique-key behaviour would need investigating). My plan is to write the NULL-vs-0 investigation query first, then prove the unique constraint gap with two real inserts, then write `002_fix_withdrawal_reference.sql` as a forward-only migration.
-- **Task 6 (Infrastructure, ~15 min):** No code required, just written reasoning on three incidents. Straightforward to slot in whenever time allows since it doesn't depend on the running environment.
-- **Task 7 (Python, ~10 min):** Small, isolated script fix. Lowest point value, planned last if time is tight.
+
 
 ## 3. Task 4 — the defects
 
@@ -53,9 +51,15 @@ than regenerated on retry? What would break?
 
 If a request reaches the server and creates the withdrawal, but the response is lost before the client sees it (e.g. a dropped connection), a retry is indistinguishable from a brand new request unless it carries the same reference. A new reference on retry means the server treats it as a fresh withdrawal and pays out twice for one instruction. Reusing the same reference lets the server recognize "I already did this" and return the original result instead of creating a duplicate.
 
-**Task 5.2:** *Not yet answered — Task 5 not started.*
+**Task 5.2:** Why did the unique key fail to prevent duplicates, and why add a
+new migration rather than editing the old one?
 
-**Task 7:** *Not yet answered — Task 7 not started.*
+The original key was `UNIQUE KEY uq_reference (instructor_id, payout_reference, cancelled_at)` MySQL treats each `NULL` as distinct from every other `NULL` for uniqueness purposes, so two rows with the same `instructor_id` and `payout_reference` but both `cancelled_at = NULL` never collide, the constraint silently let duplicates through. I fixed this with a generated `active_reference` column that is `NULL` whenever a withdrawal is cancelled, and put the real unique key on `(instructor_id, active_reference)` instead, so only genuinely active duplicates get blocked. I used a new migration file (`002_fix_withdrawal_reference.sql`) rather than editing `001_initial.sql` because `001` has already been applied to the running database, editing it changes nothing locally and would rewrite schema history for anyone applying the migrations fresh later.
+
+**Task 7:** `"fee_minor": null`. Should that be treated as a zero fee, or as
+an error?
+
+I treated it as an error, not a zero fee. Silently assuming "no fee" on a money-reconciliation script could hide a real fee that simply wasn't recorded correctly, and it's safer for the script to flag the row for a human to check than to guess on their behalf.
 
 ## 5. Anything wrong in our brief
 
@@ -70,11 +74,11 @@ Tasks 1–4, plus a separate Claude Code session for part of Task 2.
 
 | Task | What AI produced | Accepted / rejected / modified |
 |---|---|---|
-| 1 | I used AI to review existing scaffolded files together before writing anything | I accepted after understanding the reasoning and implementation |
-| 2 | AI was used to build out the response interceptor, login/earnings pages, sign-out button | I manually tested all four scenarios (signed out, signed in, sign-out, learner-vs-instructor on /earnings) before treating it as done |
-| 3 | Full withdrawal form code provided directly on request (zod schema, `WithdrawalForm.tsx`, `withdrawals.ts` mutation hook, idempotency-key wiring) | Accepted as given, but manually ran all four evidence scenarios (validation, server error, success, network) to confirm it actually worked end to end, including diagnosing a real `withdrawal_in_progress` state that came from my own earlier test data, not a bug |
-| 4 | Diagnosis walked through step by step (what to compare, what to look at) rather than handed the fixes outright; I located and typed each fix myself | Accepted the diagnosis; one of my own fixes (`lesson_count` column name) had a typo on my first attempt (`lessons_count`), which I caught myself by cross-checking against a direct SQL `SELECT` rather than trusting the API response alone |
-| 8 (this file) | Structure and draft wording for this SOLUTION.md, based on the actual work done in this conversation | Reviewing and will edit before submitting; treat this as a first draft |
+| 4 | Diagnosis walked through step by step I located and typed each fix myself | Accepted the diagnosis; one of my own fixes (`lesson_count` column name) had a typo on my first attempt (`lessons_count`), which I caught myself by cross-checking against a direct SQL `SELECT` rather than trusting the API response alone |
+| 5 | Guidance on the NULL-vs-uniqueness behaviour in MySQL and the generated-column fix approach for the duplicate withdrawal bug | Accepted after understanding the reasoning; the "before" proof required restarting the containers from scratch (`docker compose down -v`) to genuinely re-test the un-migrated state, which I ran myself |
+| 6 | Full written reasoning for all three incidents provided directly on request | Accepted as given; this task has no running code to independently verify against, so the check here was reading and confirming the reasoning made sense against my own understanding of how deploys and containers work |
+| 7 | Full rewrite of `summarise()` and `main()` provided directly, including exit-code handling | Accepted as given, but personally ran both required evidence cases (a real run against the seeded data, and a run against a missing file) and manually checked the printed totals against the raw data in `payouts.json` by hand before trusting them |
+
 
 ### 6b. What you accepted or rejected, and why
 
@@ -86,6 +90,8 @@ I didn't reject any AI suggestions outright in this session, but I didn't take a
 - **Task 2:** Manually tested `/earnings` signed out, signed in as instructor, signed out again, and signed in as learner, and captured the actual 200 response body for the learner case as evidence of the bug (later fixed in Task 4).
 - **Task 3:** Ran the withdrawal form four separate times through the actual UI, and after each attempt queried `wp_bl_withdrawals` directly via `mysql -u bemalearn ...` to see the real row state (pending/cancelled) rather than trusting the UI message alone.
 - **Task 4:** For every one of the 4 defects, ran `curl -i` against the live API before and after each fix (temporarily reverting the fix to capture a "before" snapshot), and additionally ran a direct SQL query (`SHOW COLUMNS`, `SELECT lesson_count`) to confirm the schema-mismatch fix matched real data rather than just checking the response changed shape.
+- **Task 5:** For the duplicate-key proof, ran a real `INSERT` twice with identical `instructor_id`/`payout_reference` against the un-migrated schema and confirmed both rows landed via `SELECT`. After applying the migration, re-ran the identical insert and confirmed it was rejected with a real `ERROR 1062` duplicate-key error, not just checked the migration file for correctness.
+- **Task 7:** Ran the script against the real seeded `payouts.json` and checked the printed totals by hand against the raw JSON (instructor 7: only the paid, fee-populated row counted; instructor 9: same; instructor 11's paid-but-no-fee row correctly excluded and flagged), then separately ran it against a nonexistent filename and confirmed the exit code was `2` via `echo $?`, not just that an error message printed.
 
 ### 6d. Assumptions you made
 
@@ -102,4 +108,4 @@ I didn't reject any AI suggestions outright in this session, but I didn't take a
 - I guess I would add automated unit tests for the frontend or backend changes, today everything was verified manually via curl, SQL, and the browser.
 - The `pending`-withdrawal check and the subsequent insert in `create_withdrawal()` are two separate queries, not wrapped in a transaction or row lock. Two near-simultaneous requests could both pass the "no pending withdrawal" check before either one inserts, a race condition I did not test for and did not fix, since it's outside the 4 documented defects.
 - I sent `payoutReference` in both the request body and the `Idempotency-Key` header as required, but I did not verify whether the backend actually enforces the header value separately from the body value, only that the body-based idempotency (matching on `instructor_id` + `payout_reference`) works as tested.
-- Tasks 5, 6, and 7 are not done yet. In prod, those would be the immediate risk, particularly Task 5, since the unique-key gap it targets is a real duplicate-payout risk in the same withdrawal flow Task 3 and Task 4 already touch.
+- The Task 7 script has no automated tests either, the two evidence cases (real data, missing file) were run manually, not wired into any CI. Real production data will have shapes I haven't seen (extra fields, different status strings, malformed JSON beyond a missing file), and the script would need broader test coverage before I'd trust it unattended.

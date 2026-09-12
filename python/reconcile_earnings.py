@@ -28,19 +28,28 @@ def load_payouts(path):
 def summarise(payouts):
     """Total the payouts per instructor.
 
-    Each record looks like:
-        {"instructor_id": 7, "amount_minor": 60000, "status": "paid",
-         "fee_minor": 250}
-
     Only PAID rows count towards the total. A failed or pending payout has not
     moved any money.
+
+    A row with a missing or null fee_minor is treated as a data problem, not
+    a zero fee: silently assuming "no fee" on a money-reconciliation script
+    could hide a real charge that just wasn't recorded. Such rows are skipped
+    from the totals and reported separately so a human can check them.
     """
     totals = {}
+    unknown_fee = []
 
     for row in payouts:
+        if row.get("status") != "paid":
+            continue
+
         instructor = row["instructor_id"]
         amount = row["amount_minor"]
-        fee = row["fee_minor"]
+        fee = row.get("fee_minor")
+
+        if fee is None:
+            unknown_fee.append(instructor)
+            continue
 
         net = amount - fee
 
@@ -48,7 +57,7 @@ def summarise(payouts):
             totals[instructor] = 0
         totals[instructor] += net
 
-    return totals
+    return totals, unknown_fee
 
 
 def main(argv):
@@ -56,12 +65,21 @@ def main(argv):
         print("usage: reconcile_earnings.py <payouts.json>", file=sys.stderr)
         return 1
 
-    payouts = load_payouts(argv[1])
-    totals = summarise(payouts)
+    try:
+        payouts = load_payouts(argv[1])
+    except (FileNotFoundError, json.JSONDecodeError) as exc:
+        print(f"error: could not read {argv[1]}: {exc}", file=sys.stderr)
+        return 2
+
+    totals, unknown_fee = summarise(payouts)
 
     print("instructor_id,total_net_minor")
     for instructor, total in sorted(totals.items()):
         print(f"{instructor},{total}")
+
+    if unknown_fee:
+        print(f"warning: {len(unknown_fee)} paid row(s) had a missing/null fee_minor and were excluded: instructor ids {unknown_fee}", file=sys.stderr)
+        return 3
 
     return 0
 
